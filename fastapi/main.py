@@ -26,6 +26,7 @@ app.add_middleware(
     allow_origins=[
         "https://siparta.id",
         "https://www.siparta.id",
+        "https://siparta.vercel.app",
         "http://localhost:3000"
     ],
     allow_credentials=True,
