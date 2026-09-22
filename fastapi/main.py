@@ -23,7 +23,11 @@ app = FastAPI(
 # Konfigurasi CORS agar frontend (Next.js) bisa mengakses API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Dalam produksi ganti dengan origin Vercel/Railway
+    allow_origins=[
+        "https://siparta.id",
+        "https://www.siparta.id",
+        "http://localhost:3000"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
