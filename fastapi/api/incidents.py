@@ -226,12 +226,7 @@ async def process_incident_pipeline(
                 # Tetap update is_anchored agar dashboard akurat.
                 logger.warning("[PIPELINE] tx_hash ada tetapi tx_log_id None. Fallback anchoring.")
                 try:
-                    from core.config import settings as cfg
-                    from supabase import create_client
-                    client = create_client(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY)
-                    client.table("incident_events").update(
-                        {"is_anchored": True}
-                    ).eq("id", incident_id).execute()
+                    db.mark_incident_anchored(incident_id)
                 except Exception as fb_err:
                     logger.error(f"[PIPELINE] Fallback anchoring gagal: {fb_err}")
                 logger.info(f"[PIPELINE] Blockchain anchored: {tx_hash}")
@@ -249,12 +244,7 @@ async def process_incident_pipeline(
     # ── C. Update Supabase dengan hasil AI ─────────────────────────────────
     if incident_id and gemini_analysis:
         try:
-            from core.config import settings as cfg
-            from supabase import create_client
-            client = create_client(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY)
-            client.table("incident_events").update(
-                {"ai_analysis_text": gemini_analysis}
-            ).eq("id", incident_id).execute()
+            db.update_incident_ai_analysis(incident_id, gemini_analysis)
         except Exception as e:
             logger.error(f"[PIPELINE] Gagal update AI analysis ke DB: {e}")
 

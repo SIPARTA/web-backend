@@ -226,7 +226,7 @@ def insert_audit_log(
             inserted = response.data[0]
             logger.info(f"[SUPABASE] Audit log saved: {inserted.get('id')}")
             # Mark incident as anchored
-            _mark_incident_anchored(incident_id)
+            mark_incident_anchored(incident_id)
             return inserted
         return None
     except Exception as e:
@@ -234,7 +234,7 @@ def insert_audit_log(
         return None
 
 
-def _mark_incident_anchored(incident_id: str) -> None:
+def mark_incident_anchored(incident_id: str) -> None:
     """Set is_anchored=true pada incident setelah audit_log berhasil dibuat."""
     client = _get_client()
     if not client:
@@ -244,3 +244,16 @@ def _mark_incident_anchored(incident_id: str) -> None:
         logger.info(f"[SUPABASE] Incident {incident_id} marked as anchored.")
     except Exception as e:
         logger.error(f"[SUPABASE] Gagal mark incident sebagai anchored: {e}")
+
+def update_incident_ai_analysis(incident_id: str, ai_analysis_text: str) -> None:
+    """Update field ai_analysis_text pada tabel incident_events."""
+    client = _get_client()
+    if not client:
+        return
+    try:
+        client.table("incident_events").update(
+            {"ai_analysis_text": ai_analysis_text}
+        ).eq("id", incident_id).execute()
+        logger.info(f"[SUPABASE] AI Analysis updated untuk incident {incident_id}.")
+    except Exception as e:
+        logger.error(f"[SUPABASE] Gagal update AI analysis ke DB: {e}")
