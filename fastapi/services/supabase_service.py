@@ -158,7 +158,6 @@ def update_transaction_status(
     tx_log_id: str,
     tx_hash: str,
     status: str,
-    block_number: Optional[int] = None,
 ) -> Optional[dict]:
     """
     Update status transaksi setelah konfirmasi dari blockchain.
@@ -167,7 +166,6 @@ def update_transaction_status(
         tx_log_id   : UUID dari transactions_logs.id.
         tx_hash     : Hash transaksi Polygon yang sudah dikonfirmasi.
         status      : 'SUCCESS' atau 'FAILED'.
-        block_number: Nomor blok (jika SUCCESS).
     """
     client = _get_client()
     if not client:

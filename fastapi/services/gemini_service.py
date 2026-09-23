@@ -1,4 +1,5 @@
 import os
+import logging
 import google.generativeai as genai
 from dotenv import load_dotenv
 from pathlib import Path
@@ -7,37 +8,79 @@ from pathlib import Path
 _env_path = Path(__file__).resolve().parent.parent.parent / ".env"
 load_dotenv(_env_path)
 
+logger = logging.getLogger("siparta.gemini_service")
+
 # Setup API Key Google Gemini
 genai.configure(api_key=os.getenv("GEMINI_API_KEY", ""))
 
 def analyze_incident_with_gemini(sensor_data: dict, image_path: str):
     """
     Meneruskan foto dari RPi dan data telemetri ke Google Gemini.
-    Tujuannya untuk memberikan rekomendasi evakuasi darurat (Mitigasi).
+    Tujuannya untuk memberikan rekomendasi mitigasi keselamatan (Evakuasi/Penanganan).
     """
-    print("[GEMINI] Meminta analisis Computer Vision dari Google...")
+    logger.info("[GEMINI] Meminta analisis Keselamatan dari Google...")
+    
+    # ── Fallback Message Dinamis ──
+    fallback_msg = "Gagal mendapatkan analisis AI. Terapkan protokol evakuasi standar."
+    if sensor_data.get('status') == 'BAHAYA':
+        fallback_msg = "SISTEM AI GAGAL TERHUBUNG. STATUS BAHAYA. SEGERA EVAKUASI DAN HUBUNGI PEMADAM KEBAKARAN/TIM TANGGAP DARURAT!"
+    elif sensor_data.get('status') == 'AMAN':
+        fallback_msg = "Sistem AI tidak dapat diakses. Namun, indikator sensor menunjukkan status AMAN."
+
     try:
-        # Menggunakan Gemini 1.5 Flash yang sangat cepat & ideal untuk analisis visi
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # System Instruction untuk mengunci persona AI agar aman dan tidak berbahaya
+        system_instruction = (
+            "Anda adalah AI Keselamatan Darurat SIPARTA (Sistem Pintar Deteksi Kimia). "
+            "Tugas utama Anda adalah memberikan panduan mitigasi keselamatan yang sangat konservatif dan defensif. "
+            "Aturan ketat yang TIDAK BOLEH dilanggar: "
+            "1. JANGAN PERNAH menyarankan eksperimen kimia, manipulasi, pembuatan, pencampuran, atau penetralan zat kimia secara mandiri. "
+            "2. JIKA mendeteksi bahaya tinggi (Amonia, Karbon Monoksida tinggi, Gas mudah terbakar), prioritas UTAMA adalah EVAKUASI dan menjauh dari sumber. "
+            "3. JANGAN menyarankan pengguna untuk menyentuh, mendekati, atau mematikan kebocoran secara langsung tanpa APD profesional. "
+            "4. Jika data sensor bertentangan, ambigu, atau tidak wajar, instruksikan pengguna untuk mengandalkan alarm fisik dan segera menjauh. "
+            "5. Hindari diagnosis kepastian medis; arahkan pengguna untuk mencari bantuan medis (P3K) jika terpapar."
+        )
+
+        model = genai.GenerativeModel(
+            model_name='gemini-2.5-flash',
+            system_instruction=system_instruction
+        )
         
-        # Upload file gambar barang bukti
-        sample_file = genai.upload_file(path=image_path, display_name="SIPARTA_Incident_Visual")
-        
+        # Mapping sensor untuk memandu AI
         prompt = f"""
         [SISTEM DARURAT SIPARTA]
         Status Bahaya: {sensor_data['status']}
-        Data Sensor Gas: {sensor_data['sensors']}
         Waktu Kejadian: {sensor_data['timestamp']}
         
-        Tugas Anda sebagai AI Keselamatan:
-        1. Analisis gambar terlampir (foto lokasi kejadian). Apakah ada asap tebal, api, kebocoran, atau korban?
-        2. Korelasikan dengan tegangan gas (Data di atas).
-        3. Berikan 3 poin singkat rekomendasi tindakan evakuasi atau penanganan medis segera!
+        [PANDUAN REFERENSI SENSOR (Hanya Info Pendukung)]
+        - MICS-5524 : Mengukur Karbon Monoksida (CO) dan Gas Mudah Terbakar.
+        - TGS2600   : Mengukur Polutan Udara (VOC Ringan, Metana, Isobutana).
+        - MQ-2      : Mengukur Asap, Propana, Hidrogen (H2).
+        - MQ-135    : Mengukur Amonia (NH3), Benzena, Hidrogen Sulfida (H2S), CO2.
+        *Catatan: Nilai di atas 2.0V mengindikasikan kehadiran gas secara signifikan.
+        
+        [DATA PEMBACAAN SENSOR SAAT INI (Tegangan Output ADC)]
+        - MICS-5524 : {sensor_data['sensors'].get('mics5524', 0)} Volt
+        - TGS2600   : {sensor_data['sensors'].get('tgs2600', 0)} Volt
+        - MQ-2      : {sensor_data['sensors'].get('mq2', 0)} Volt
+        - MQ-135    : {sensor_data['sensors'].get('mq135', 0)} Volt
+        
+        Tugas Anda:
+        1. Analisis gambar terlampir (foto lokasi kejadian) jika relevan. Adakah asap tebal, sumber api, atau hal mencurigakan? (Jangan berasumsi berlebihan jika gambar gelap/kabur, andalkan data sensor).
+        2. Berdasarkan pembacaan sensor dan status '{sensor_data['status']}', gas berbahaya apa yang paling mungkin sedang mencemari ruangan?
+        3. Berikan maksimal 3 poin singkat (tiap poin max 2 kalimat) rekomendasi tindakan mitigasi, perlindungan diri, atau evakuasi! 
         """
         
-        response = model.generate_content([sample_file, prompt])
+        # Upload file gambar barang bukti (jika ada)
+        contents = []
+        if image_path and os.path.exists(image_path):
+            sample_file = genai.upload_file(path=image_path, display_name="SIPARTA_Incident_Visual")
+            contents.append(sample_file)
+        
+        contents.append(prompt)
+        
+        response = model.generate_content(contents)
         return response.text
         
     except Exception as e:
-        print(f"[GEMINI] Gagal memanggil API: {e}")
-        return "Gagal mendapatkan analisis AI. Terapkan protokol evakuasi standar."
+        logger.error(f"[GEMINI] Gagal memanggil API: {e}")
+        return fallback_msg

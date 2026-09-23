@@ -36,7 +36,7 @@ CREATE TABLE iot_devices (
 -- Tabel ini adalah jantung dari sistem, menampung payload dari main_rpi.py
 CREATE TABLE incident_events (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    device_id UUID NOT NULL REFERENCES iot_devices(id) ON DELETE CASCADE,
+    device_id UUID REFERENCES iot_devices(id) ON DELETE CASCADE,
     
     incident_type VARCHAR(100) NOT NULL, -- Klasifikasi AI: 'GAS_LEAK', 'TOXIC_MIXTURE', 'SAFE'
     severity VARCHAR(50) NOT NULL,       -- Berdasarkan status: 'AMAN', 'WASPADA', 'BAHAYA'

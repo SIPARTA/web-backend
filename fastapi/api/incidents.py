@@ -95,7 +95,10 @@ async def report_incident(
 
     # Normalisasi status ke format uppercase
     status_upper = status.upper()
-    classification_lower = status.lower()  # untuk blockchain (aman/waspada/bahaya)
+    if status_upper not in ("AMAN", "WASPADA", "BAHAYA"):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Invalid status value. Must be AMAN, WASPADA, or BAHAYA")
+    classification_lower = status_upper.lower()  # untuk blockchain (aman/waspada/bahaya)
 
     payload = {
         "status": status_upper,
@@ -108,7 +111,7 @@ async def report_incident(
     # ── 3. Simpan ke Supabase (SYNCHRONOUS — sebelum background) ───────────
     # Ini memberikan ID unik yang akan digunakan di blockchain anchoring
     incident_record = db.insert_incident_event(
-        device_id=device_id or "00000000-0000-0000-0000-000000000000",
+        device_id=device_id or None,
         incident_type=f"GAS_{status_upper}",
         severity=status_upper,
         sensor_data=sensor_data,
@@ -185,17 +188,20 @@ async def process_incident_pipeline(
         try:
             logger.info("[PIPELINE] Mengirim ke Blockchain Relay...")
             # Tambahkan sensor payload untuk mode LEGACY (GasDetectionStorage)
+            # ipfs_cid sengaja dikosongkan agar relay_runner.ts upload ke Pinata
+            # dan menghasilkan CID asli yang dapat diverifikasi.
             payload_with_sensors = {
                 **payload,
                 "incident_id": incident_id,
-                "ipfs_cid": f"bafybeihash_{incident_id}",  # placeholder; replace dengan Pinata upload
+                # Jangan isi ipfs_cid — relay_runner.ts akan upload metadata
+                # ke Pinata IPFS dan menghasilkan CID valid secara otomatis.
                 "mics5524": payload["sensors"]["mics5524"],
                 "tgs2600": payload["sensors"]["tgs2600"],
                 "mq2": payload["sensors"]["mq2"],
                 "mq135": payload["sensors"]["mq135"],
-                "image_url": "",
+                "image_url": image_path or "",
             }
-            blockchain_result = log_incident_to_blockchain(payload_with_sensors)
+            blockchain_result = await log_incident_to_blockchain(payload_with_sensors)
             tx_hash = blockchain_result.get("txHash") or blockchain_result.get("tx_hash")
             block_number = blockchain_result.get("blockNumber") or blockchain_result.get("block_number")
 
@@ -205,16 +211,35 @@ async def process_incident_pipeline(
                     tx_log_id=tx_log_id,
                     tx_hash=tx_hash,
                     status="SUCCESS",
-                    block_number=block_number,
                 )
+                # Ambil ipfs_cid dari hasil relay (relay_runner.ts mengupload ke Pinata)
+                ipfs_cid = blockchain_result.get("ipfsCid") or blockchain_result.get("ipfs_cid", "")
                 # Simpan audit log (bukti forensik on-chain)
                 db.insert_audit_log(
                     incident_id=incident_id,
                     tx_log_id=tx_log_id,
-                    ipfs_cid=payload_with_sensors["ipfs_cid"],
+                    ipfs_cid=ipfs_cid,
                     block_number=block_number,
                 )
-            logger.info(f"[PIPELINE] Blockchain anchored: {tx_hash}")
+            elif tx_hash and not tx_log_id:
+                # Fallback: tx berhasil tetapi insert_transaction_log gagal.
+                # Tetap update is_anchored agar dashboard akurat.
+                logger.warning("[PIPELINE] tx_hash ada tetapi tx_log_id None. Fallback anchoring.")
+                try:
+                    from core.config import settings as cfg
+                    from supabase import create_client
+                    client = create_client(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY)
+                    client.table("incident_events").update(
+                        {"is_anchored": True}
+                    ).eq("id", incident_id).execute()
+                except Exception as fb_err:
+                    logger.error(f"[PIPELINE] Fallback anchoring gagal: {fb_err}")
+                logger.info(f"[PIPELINE] Blockchain anchored: {tx_hash}")
+            else:
+                # Blockchain relay mengembalikan error tanpa txHash
+                logger.error(f"[PIPELINE] Relay mengembalikan hasil gagal tanpa txHash: {blockchain_result}")
+                if tx_log_id:
+                    db.update_transaction_status(tx_log_id, "", "FAILED")
 
         except Exception as e:
             logger.error(f"[PIPELINE] Blockchain error: {e}")
@@ -257,7 +282,7 @@ async def verify_incident_onchain(incident_id: str):
     """
     from services.web3_service import verify_incident_on_chain
     try:
-        is_verified = verify_incident_on_chain(incident_id)
+        is_verified = await verify_incident_on_chain(incident_id)
         return {
             "incident_id": incident_id,
             "on_chain": is_verified,
