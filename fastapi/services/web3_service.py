@@ -54,7 +54,17 @@ async def log_incident_to_blockchain(payload: dict) -> dict:
 async def verify_incident_on_chain(incident_uuid: str) -> bool:
     """
     Verifikasi apakah insiden sudah tercatat di SipartaAudit contract.
-    Belum diimplementasikan sepenuhnya di Python, namun bisa menggunakan get_total_data / fallback.
     """
-    logger.warning("[WEB3] verify_incident_on_chain belum didukung penuh via Python (read-only).")
-    return False
+    if PolygonAmoyClient is None:
+        logger.error("[WEB3] Client tidak tersedia, return False.")
+        return False
+
+    try:
+        def _verify():
+            client = PolygonAmoyClient()
+            return client.verify_incident(incident_uuid)
+            
+        return await asyncio.to_thread(_verify)
+    except Exception as e:
+        logger.error(f"[WEB3] Gagal verify_incident_on_chain: {e}")
+        return False

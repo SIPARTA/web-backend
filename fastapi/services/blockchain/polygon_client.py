@@ -382,7 +382,19 @@ class PolygonAmoyClient:
             "ipfs_cid": ipfs_cid
         }
 
-
+    def verify_incident(self, incident_id: str) -> bool:
+        """Check if an incident exists on-chain using the verifyIncident view function."""
+        if self._w3 is None:
+            self.connect()
+        self._require_connected()
+        assert self._w3 is not None and self._contract is not None
+        
+        try:
+            incident_id_bytes = Web3.keccak(text=incident_id)
+            return self._contract.functions.verifyIncident(incident_id_bytes).call()
+        except Exception as e:
+            logger.error("%s Failed to verify incident %s: %s", TAG, incident_id, e)
+            return False
 
     def _sign_and_send(self, fn: Any) -> str:
         """Estimate gas → build → sign → broadcast. Returns hex hash."""

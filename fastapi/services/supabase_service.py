@@ -29,7 +29,7 @@ _supabase_client = None
 
 
 def _get_client():
-    """Return singleton Supabase client, init on first call."""
+    """Return singleton Supabase client, init on first call. Retry if previously failed."""
     global _supabase_client
     if _supabase_client is None:
         url = os.getenv("SUPABASE_URL", "")
@@ -37,7 +37,7 @@ def _get_client():
         if not url or not key:
             logger.warning(
                 "[SUPABASE] SUPABASE_URL atau SUPABASE_SERVICE_ROLE_KEY belum diset. "
-                "Operasi DB akan di-skip."
+                "Operasi DB akan di-skip. (Akan mencoba ulang di request berikutnya)"
             )
             return None
         try:
@@ -45,7 +45,7 @@ def _get_client():
             _supabase_client = create_client(url, key)
             logger.info("[SUPABASE] Client berhasil diinisialisasi.")
         except Exception as e:
-            logger.error(f"[SUPABASE] Gagal membuat client: {e}")
+            logger.error(f"[SUPABASE] Gagal membuat client: {e}. (Akan mencoba ulang di request berikutnya)")
             return None
     return _supabase_client
 
