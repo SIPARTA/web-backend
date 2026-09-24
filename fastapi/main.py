@@ -1,10 +1,6 @@
 import os
 from pathlib import Path
-from dotenv import load_dotenv
 
-# Load .env dari root web-backend sebelum import apapun yang butuh env vars
-_env_path = Path(__file__).resolve().parent.parent / ".env"
-load_dotenv(_env_path)
 
 import logging
 from contextlib import asynccontextmanager
@@ -75,8 +71,9 @@ def health_check(response: Response):
         "status": "ok",
         "components": {
             "supabase": "ok" if settings.SUPABASE_URL else "missing_config",
-            "gemini": "ok" if os.getenv("GEMINI_API_KEY") else "missing_config",
-            "blockchain": "ok" if os.getenv("DEVICE_API_KEY") else "missing_config"
+            "gemini": "ok" if settings.GEMINI_API_KEY else "missing_config",
+            "blockchain": "ok" if os.getenv("POLYGON_AMOY_PRIVATE_KEY") or os.getenv("RELAYER_PRIVATE_KEY") else "missing_config",
+            "iot_auth": "ok" if settings.DEVICE_API_KEY else "missing_config"
         }
     }
     

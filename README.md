@@ -86,7 +86,7 @@ uvicorn fastapi.main:app --reload
 Backend ini dikonfigurasi untuk berjalan langsung secara native di environment **Python 3** pada Render, tanpa menggunakan Docker.
 
 - **Build Command**: `pip install -r requirements.txt`
-- **Start Command**: `uvicorn fastapi.main:app --host 0.0.0.0 --port $PORT`
+- **Start Command**: `cd fastapi && uvicorn main:app --host 0.0.0.0 --port $PORT`
 - **Environment Variables**:
   - `SUPABASE_URL`
   - `SUPABASE_SERVICE_ROLE_KEY`

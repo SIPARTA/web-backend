@@ -1,17 +1,19 @@
 import os
 import logging
 import google.generativeai as genai
-from dotenv import load_dotenv
-from pathlib import Path
-
-# Load .env dari root web-backend (bukan CWD)
-_env_path = Path(__file__).resolve().parent.parent.parent / ".env"
-load_dotenv(_env_path)
-
 logger = logging.getLogger("siparta.gemini_service")
 
-# Setup API Key Google Gemini
-genai.configure(api_key=os.getenv("GEMINI_API_KEY", ""))
+_GEMINI_CONFIGURED = False
+
+def _ensure_configured():
+    global _GEMINI_CONFIGURED
+    if not _GEMINI_CONFIGURED:
+        api_key = os.getenv("GEMINI_API_KEY", "")
+        if api_key:
+            genai.configure(api_key=api_key)
+            _GEMINI_CONFIGURED = True
+        else:
+            logger.warning("[GEMINI] GEMINI_API_KEY tidak ditemukan di environment.")
 
 def analyze_incident_with_gemini(sensor_data: dict, image_path: str):
     """
@@ -19,6 +21,7 @@ def analyze_incident_with_gemini(sensor_data: dict, image_path: str):
     Tujuannya untuk memberikan rekomendasi mitigasi keselamatan (Evakuasi/Penanganan).
     """
     logger.info("[GEMINI] Meminta analisis Keselamatan dari Google...")
+    _ensure_configured()
     
     # ── Fallback Message Dinamis ──
     fallback_msg = "Gagal mendapatkan analisis AI. Terapkan protokol evakuasi standar."

@@ -20,11 +20,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from pathlib import Path
 
-from dotenv import load_dotenv
 import os
-
-_env_path = Path(__file__).resolve().parent.parent.parent / ".env"
-load_dotenv(_env_path)
 
 logger = logging.getLogger(__name__)
 

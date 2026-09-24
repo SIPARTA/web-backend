@@ -14,13 +14,8 @@ from pathlib import Path
 
 logger = logging.getLogger("siparta.web3_service")
 
-# Tambahkan project root ke sys.path agar bisa import blockchain_services
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
 try:
-    from blockchain_services.polygon_client import PolygonAmoyClient, BlockchainError
+    from services.blockchain.polygon_client import PolygonAmoyClient, BlockchainError
 except ImportError as e:
     logger.error(f"[WEB3] Gagal import PolygonAmoyClient: {e}")
     PolygonAmoyClient = None

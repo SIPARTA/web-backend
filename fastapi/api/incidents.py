@@ -100,18 +100,28 @@ async def report_incident(
         raise HTTPException(status_code=400, detail="Invalid status value. Must be AMAN, WASPADA, or BAHAYA")
     classification_lower = status_upper.lower()  # untuk blockchain (aman/waspada/bahaya)
 
+    # Validasi device_id agar tidak kena foreign key constraint error di Supabase
+    valid_device_id = None
+    if device_id:
+        try:
+            val = uuid.UUID(device_id, version=4)
+            valid_device_id = str(val)
+        except ValueError:
+            logger.warning(f"[INCIDENTS] Invalid device_id format '{device_id}', setting to None.")
+            valid_device_id = None
+
     payload = {
         "status": status_upper,
         "classification": classification_lower,
         "sensors": sensor_data,
         "timestamp": timestamp,
-        "device_id": device_id,
+        "device_id": valid_device_id,
     }
 
     # ── 3. Simpan ke Supabase (SYNCHRONOUS — sebelum background) ───────────
     # Ini memberikan ID unik yang akan digunakan di blockchain anchoring
     incident_record = db.insert_incident_event(
-        device_id=device_id or None,
+        device_id=valid_device_id,
         incident_type=f"GAS_{status_upper}",
         severity=status_upper,
         sensor_data=sensor_data,
