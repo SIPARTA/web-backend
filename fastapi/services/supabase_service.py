@@ -6,8 +6,8 @@ Menggunakan supabase-py client library.
 
 Tabel yang dikelola:
   - incident_events  : Data insiden real-time dari RPi
-  - transactions_logs: Status transaksi blockchain
-  - audit_logs       : Anchor kriptografis ke Polygon
+  - transaction_logs: Status transaksi blockchain
+  - audit_log       : Anchor kriptografis ke Polygon
 
 Catatan Desain:
   - Semua fungsi mengembalikan dict atau None, tidak raise exception ke caller.
@@ -115,7 +115,7 @@ def insert_transaction_log(
     status: str = "PENDING",
 ) -> Optional[dict]:
     """
-    Mencatat transaksi blockchain baru ke tabel transactions_logs.
+    Mencatat transaksi blockchain baru ke tabel transaction_logs.
 
     Args:
         entity_type : 'INCIDENT' atau 'CERTIFICATE'.
@@ -139,14 +139,14 @@ def insert_transaction_log(
     }
 
     try:
-        response = client.table("transactions_logs").insert(record).execute()
+        response = client.table("transaction_logs").insert(record).execute()
         if response.data:
             inserted = response.data[0]
             logger.info(f"[SUPABASE] Tx log saved: {inserted.get('id')} | status={status}")
             return inserted
         return None
     except Exception as e:
-        logger.error(f"[SUPABASE] Gagal insert transactions_logs: {e}")
+        logger.error(f"[SUPABASE] Gagal insert transaction_logs: {e}")
         return None
 
 
@@ -159,7 +159,7 @@ def update_transaction_status(
     Update status transaksi setelah konfirmasi dari blockchain.
 
     Args:
-        tx_log_id   : UUID dari transactions_logs.id.
+        tx_log_id   : UUID dari transaction_logs.id.
         tx_hash     : Hash transaksi Polygon yang sudah dikonfirmasi.
         status      : 'SUCCESS' atau 'FAILED'.
     """
@@ -171,7 +171,7 @@ def update_transaction_status(
 
     try:
         response = (
-            client.table("transactions_logs")
+            client.table("transaction_logs")
             .update(updates)
             .eq("id", tx_log_id)
             .execute()
@@ -181,7 +181,7 @@ def update_transaction_status(
             return response.data[0]
         return None
     except Exception as e:
-        logger.error(f"[SUPABASE] Gagal update transactions_logs: {e}")
+        logger.error(f"[SUPABASE] Gagal update transaction_logs: {e}")
         return None
 
 
@@ -201,7 +201,7 @@ def insert_audit_log(
 
     Args:
         incident_id : UUID dari incident_events.id.
-        tx_log_id   : UUID dari transactions_logs.id.
+        tx_log_id   : UUID dari transaction_logs.id.
         ipfs_cid    : Content Identifier IPFS metadata insiden.
         block_number: Nomor blok Polygon saat konfirmasi.
     """
@@ -210,14 +210,16 @@ def insert_audit_log(
         return None
 
     record = {
-        "incident_id": incident_id,
+        "incident_event_id": incident_id,
+        "action": "UPLOAD_AND_ANCHOR",
+        "encrypted_data_reference": "aes-256-gcm (Pinata IPFS)",
         "tx_id": tx_log_id,
         "ipfs_cid": ipfs_cid,
         "block_number": block_number,
     }
 
     try:
-        response = client.table("audit_logs").insert(record).execute()
+        response = client.table("audit_log").insert(record).execute()
         if response.data:
             inserted = response.data[0]
             logger.info(f"[SUPABASE] Audit log saved: {inserted.get('id')}")
@@ -226,7 +228,7 @@ def insert_audit_log(
             return inserted
         return None
     except Exception as e:
-        logger.error(f"[SUPABASE] Gagal insert audit_logs: {e}")
+        logger.error(f"[SUPABASE] Gagal insert audit_log: {e}")
         return None
 
 

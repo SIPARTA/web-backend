@@ -2,14 +2,49 @@ import os
 from pathlib import Path
 
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
-from api import incidents
+from api import incidents, devices
 from core.config import settings
+from services.supabase_service import _get_client as get_supabase_client
 
 logger = logging.getLogger("siparta")
+
+async def monitor_device_status():
+    """Background task to mark devices as offline if heartbeat is missing for > 2 minutes."""
+    logger.info("[BACKGROUND] IoT Device heartbeat monitor started (timeout: 2 minutes).")
+    while True:
+        try:
+            db = get_supabase_client()
+            if db:
+                res = db.table("iot_devices").select("id, last_seen").eq("is_active", True).execute()
+                devices_data = res.data or []
+                
+                from datetime import datetime, timezone, timedelta
+                now = datetime.now(timezone.utc)
+                
+                for dev in devices_data:
+                    last_seen_str = dev.get("last_seen")
+                    is_offline = True
+                    if last_seen_str:
+                        try:
+                            last_seen_dt = datetime.fromisoformat(last_seen_str.replace("Z", "+00:00"))
+                            diff = now - last_seen_dt
+                            if diff <= timedelta(minutes=2):
+                                is_offline = False
+                        except Exception:
+                            pass
+                    
+                    if is_offline:
+                        db.table("iot_devices").update({"is_active": False}).eq("id", dev["id"]).execute()
+                        logger.info(f"[HEARTBEAT] Device {dev['id']} missed heartbeat and marked OFFLINE.")
+        except Exception as e:
+            logger.error(f"[HEARTBEAT] Background monitor error: {e}")
+        
+        await asyncio.sleep(60) # Check every 60 seconds
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -21,7 +56,12 @@ async def lifespan(app: FastAPI):
         logger.info("[STARTUP] ✅ Semua environment variable tervalidasi.")
     logger.info(f"[STARTUP] Supabase URL: {settings.SUPABASE_URL}")
     logger.info(f"[STARTUP] Blockchain Dir: {settings.BLOCKCHAIN_DIR}")
+    
+    # Start the background task
+    monitor_task = asyncio.create_task(monitor_device_status())
+    
     yield
+    monitor_task.cancel()
     logger.info("[SHUTDOWN] SIPARTA Backend shutting down.")
 
 app = FastAPI(
@@ -53,6 +93,7 @@ app.add_middleware(
 
 # Mounting router dari module api
 app.include_router(incidents.router, prefix="/api/v1")
+app.include_router(devices.router, prefix="/api/v1")
 
 
 @app.get("/")
